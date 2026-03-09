@@ -378,3 +378,98 @@ contract YugeAI {
         emit GuardToggled(paused);
     }
 
+    function setKeeperAuthorization(address keeper, bool authorized) external onlyCommander {
+        if (keeper == address(0)) revert YugeAI_InvalidAddress();
+        _authorizedKeepers[keeper] = authorized;
+        emit KeeperAuthorized(keeper, authorized);
+    }
+
+    function totalSweptWei() external view returns (uint256) {
+        return _totalSweptWei;
+    }
+
+    function claimCount(address account) external view returns (uint256) {
+        return _claimCount[account];
+    }
+
+    function isKeeperAuthorized(address account) external view returns (bool) {
+        return _authorizedKeepers[account];
+    }
+
+    function nextGrabId() external view returns (uint256) {
+        return _nextGrabId;
+    }
+
+    function nextDealId() external view returns (uint256) {
+        return _nextDealId;
+    }
+
+    function nextSlotIndex() external view returns (uint256) {
+        return _nextSlotIndex;
+    }
+
+    function currentEpochIndex() external view returns (uint256) {
+        return (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+    }
+
+    function lastOracleBlock() external view returns (uint256) {
+        return _lastOracleBlock;
+    }
+
+    function batchLogGrabs(uint256[] calldata intensityBpsList) external whenNotPaused returns (uint256 firstId, uint256 count) {
+        if (!_authorizedKeepers[msg.sender]) revert YugeAI_Unauthorized();
+        if (intensityBpsList.length == 0 || intensityBpsList.length > YUGEAI_MAX_BATCH_GRABS) revert YugeAI_BadInput();
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 epochStartSlot = YugeAIHelpers.epochStartSlot(epoch, YUGEAI_MAX_GRABS_PER_EPOCH);
+        if (_nextGrabId + intensityBpsList.length > epochStartSlot + YUGEAI_MAX_GRABS_PER_EPOCH) revert YugeAI_LimitReached();
+        firstId = _nextGrabId;
+        for (uint256 i = 0; i < intensityBpsList.length; i++) {
+            uint256 intensityBps = intensityBpsList[i];
+            if (intensityBps < YUGEAI_MIN_GRAB_BPS || intensityBps > YUGEAI_MAX_GRAB_BPS) revert YugeAI_BadInput();
+            uint256 grabId = _nextGrabId++;
+            GrabRecord storage r = _grabs[grabId];
+            r.intensityBps = YugeAIHelpers.clampIntensity(intensityBps, YUGEAI_MIN_GRAB_BPS, YUGEAI_MAX_GRAB_BPS);
+            r.loggedAt = uint40(block.timestamp);
+            r.epochId = uint64(epoch);
+            r.finalized = true;
+            emit GrabLogged(grabId, r.intensityBps, r.loggedAt, msg.sender);
+        }
+        count = intensityBpsList.length;
+        _epochGrabCount[epoch] += count;
+        emit BatchGrabsLogged(firstId, count, uint64(block.number));
+        return (firstId, count);
+    }
+
+    function recordEpochSnapshot(uint256 epochId) external onlyCommander returns (bool) {
+        if (epochId >= (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS) revert YugeAI_BadInput();
+        if (_epochSnapshots[epochId].recorded) revert YugeAI_SlotAlreadySealed();
+        if (epochId >= YUGEAI_EPOCH_SNAPSHOT_CAP) revert YugeAI_LimitReached();
+        uint256 startSlot = epochId * YUGEAI_MAX_GRABS_PER_EPOCH;
+        uint256 endSlot = startSlot + YUGEAI_MAX_GRABS_PER_EPOCH;
+        uint32 totalGrabs = 0;
+        uint128 sumBps = 0;
+        for (uint256 id = startSlot; id < endSlot && id < _nextGrabId; id++) {
+            GrabRecord storage r = _grabs[id];
+            if (r.loggedAt != 0) {
+                totalGrabs++;
+                sumBps += r.intensityBps;
+            }
+        }
+        _epochSnapshots[epochId] = EpochSnapshot({
+            recordedAtBlock: uint64(block.number),
+            totalGrabs: totalGrabs,
+            sumIntensityBps: sumBps,
+            recorded: true
+        });
+        emit EpochSnapshotRecorded(epochId, totalGrabs, sumBps);
+        return true;
+    }
+
+    function getEpochSnapshot(uint256 epochId) external view returns (uint64 recordedAtBlock, uint32 totalGrabs, uint128 sumIntensityBps, bool recorded) {
+        EpochSnapshot storage s = _epochSnapshots[epochId];
+        return (s.recordedAtBlock, s.totalGrabs, s.sumIntensityBps, s.recorded);
+    }
+
+    function depositVault() external payable whenNotPaused nonReentrant {
+        if (msg.value == 0) revert YugeAI_ZeroAmount();
+        _vaultBalanceWei += msg.value;
