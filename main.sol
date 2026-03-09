@@ -473,3 +473,98 @@ contract YugeAI {
     function depositVault() external payable whenNotPaused nonReentrant {
         if (msg.value == 0) revert YugeAI_ZeroAmount();
         _vaultBalanceWei += msg.value;
+        emit VaultDeposit(msg.sender, msg.value, uint64(block.number));
+    }
+
+    function withdrawVault(address to, uint256 amountWei) external onlyCommander nonReentrant {
+        if (to == address(0) || amountWei == 0) revert YugeAI_ZeroAmount();
+        if (amountWei > _vaultBalanceWei) revert YugeAI_SweepOverCap();
+        _vaultBalanceWei -= amountWei;
+        (bool ok,) = to.call{ value: amountWei }("");
+        require(ok, "YugeAI: vault withdraw failed");
+        emit VaultWithdraw(to, amountWei, uint64(block.number));
+    }
+
+    function vaultBalance() external view returns (uint256) {
+        return _vaultBalanceWei;
+    }
+
+    function distributeGoldenEpochReward(uint256 epochId, address recipient, uint256 amountWei) external onlyCommander nonReentrant {
+        if (recipient == address(0) || amountWei == 0) revert YugeAI_ZeroAmount();
+        EpochSnapshot storage s = _epochSnapshots[epochId];
+        if (!s.recorded) revert YugeAI_BadInput();
+        uint256 maxReward = YugeAIHelpers.bpsToWei(_vaultBalanceWei, YUGEAI_GOLDEN_EPOCH_REWARD_BPS);
+        if (amountWei > maxReward) revert YugeAI_SweepOverCap();
+        _vaultBalanceWei -= amountWei;
+        (bool ok,) = recipient.call{ value: amountWei }("");
+        require(ok, "YugeAI: golden reward transfer failed");
+        emit GoldenEpochReward(epochId, recipient, amountWei);
+    }
+
+    function getGrabsBatch(uint256 fromId, uint256 limit) external view returns (
+        uint256[] memory grabIds,
+        uint88[] memory intensityBpsList,
+        uint40[] memory loggedAtList,
+        uint64[] memory epochIds,
+        bool[] memory finalizedList
+    ) {
+        uint256 cap = limit > 101 ? 101 : limit;
+        grabIds = new uint256[](cap);
+        intensityBpsList = new uint88[](cap);
+        loggedAtList = new uint40[](cap);
+        epochIds = new uint64[](cap);
+        finalizedList = new bool[](cap);
+        uint256 written = 0;
+        for (uint256 id = fromId; id < _nextGrabId && written < cap; id++) {
+            GrabRecord storage r = _grabs[id];
+            if (r.loggedAt != 0) {
+                grabIds[written] = id;
+                intensityBpsList[written] = r.intensityBps;
+                loggedAtList[written] = r.loggedAt;
+                epochIds[written] = r.epochId;
+                finalizedList[written] = r.finalized;
+                written++;
+            }
+        }
+        if (written < cap) {
+            assembly {
+                mstore(grabIds, written)
+                mstore(intensityBpsList, written)
+                mstore(loggedAtList, written)
+                mstore(epochIds, written)
+                mstore(finalizedList, written)
+            }
+        }
+        return (grabIds, intensityBpsList, loggedAtList, epochIds, finalizedList);
+    }
+
+    function batchReserveSlots(uint256 count) external returns (uint256 firstSlotIndex) {
+        if (!_authorizedKeepers[msg.sender]) revert YugeAI_Unauthorized();
+        if (count == 0 || count > YUGEAI_MAX_BATCH_SLOTS) revert YugeAI_BadInput();
+        uint256 epochEnd = YugeAIHelpers.epochEndTime(genesisTime, _currentEpoch, YUGEAI_EPOCH_DURATION_SECS);
+        if (block.timestamp >= epochEnd) _currentEpoch++;
+        uint256 slotsUsed = _nextSlotIndex - YugeAIHelpers.epochStartSlot(_currentEpoch, YUGEAI_MAX_GRABS_PER_EPOCH);
+        if (slotsUsed + count > YUGEAI_MAX_GRABS_PER_EPOCH) {
+            _currentEpoch++;
+            slotsUsed = 0;
+        }
+        firstSlotIndex = _nextSlotIndex;
+        for (uint256 i = 0; i < count; i++) {
+            _slots[_nextSlotIndex++] = BatchSlot({ bandBps: 0, sealedAt: 0, variantId: 0, sealed: false });
+        }
+        return firstSlotIndex;
+    }
+
+    function getDealsBatch(uint256 fromId, uint256 limit) external view returns (
+        uint256[] memory dealIds,
+        uint96[] memory amounts,
+        uint64[] memory createdAtBlocks,
+        address[] memory parties,
+        bool[] memory actives,
+        bool[] memory closeds
+    ) {
+        uint256 cap = limit > 51 ? 51 : limit;
+        dealIds = new uint256[](cap);
+        amounts = new uint96[](cap);
+        createdAtBlocks = new uint64[](cap);
+        parties = new address[](cap);
