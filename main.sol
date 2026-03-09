@@ -188,3 +188,98 @@ contract YugeAI {
         if (msg.sender != treasury) revert YugeAI_NotTreasury();
         _;
     }
+
+    modifier onlyOracle() {
+        if (msg.sender != covfefeOracle) revert YugeAI_NotOracle();
+        _;
+    }
+
+    modifier onlyDealMaker() {
+        if (msg.sender != dealMaker) revert YugeAI_NotDealMaker();
+        _;
+    }
+
+    modifier whenNotPaused() {
+        if (guardPaused) revert YugeAI_GuardPaused();
+        _;
+    }
+
+    modifier nonReentrant() {
+        if (_reentrancyLock != 0) revert YugeAI_Reentrant();
+        _reentrancyLock = YUGEAI_LOCK_FLAG;
+        _;
+        _reentrancyLock = 0;
+    }
+
+    /*
+     * Epoch boundaries are inclusive start, exclusive end in terms of slot allocation.
+     * Grabs are keyed by global id; epochId is stored per grab for analytics.
+     * Deal slots are independent of epochs. Covfefe keys are arbitrary bytes32.
+     * Oracle cooldown applies to both setCovfefe and pulseOracle in the same way.
+     * Treasury sweep cap is fixed at deploy; vault balance is separate from general balance.
+     * Golden epoch rewards are drawn from vault only and limited by YUGEAI_GOLDEN_EPOCH_REWARD_BPS.
+     * Batch operations (batchLogGrabs, batchReserveSlots) enforce per-call limits to bound gas.
+     * Slot sealing overwrites bandBps, sealedAt, variantId and sets sealed = true; reserveSlot only allocates.
+     * Claim rewards are set by commander per claim index; claimant can claim once per index (reward zeroed after).
+     * Reentrancy guard is applied on all state-changing external functions that touch balances or deal closure.
+     */
+
+    constructor() {
+        commander = 0x7E2a4C6e8F0b2D4f6A8c0E2a4C6e8F0b2D4f6A8c0;
+        treasury = 0x1B3d5F7a9C1e3B5d7F9a1C3e5B7d9F1a3C5e7B9d1;
+        covfefeOracle = 0x9D1f3A5c7E9b1D3f5A7c9E1b3D5f7A9c1E3b5D7f9;
+        dealMaker = 0x4F6a8C0e2A4f6A8c0E2a4F6a8C0e2A4f6A8c0E2a4;
+        vault = 0xC2e4F6a8B0c2E4f6A8b0C2e4F6a8B0c2E4f6A8b0;
+
+        genesisTime = block.timestamp;
+        deployBlock = block.number;
+        sweepCapWei = YUGEAI_TREASURY_SWEEP_CAP_WEI;
+        guardPaused = false;
+        _lastOracleBlock = 0;
+        _currentEpoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        _authorizedKeepers[commander] = true;
+    }
+
+    function logGrab(uint256 intensityBps) external whenNotPaused returns (uint256 grabId) {
+        if (!_authorizedKeepers[msg.sender]) revert YugeAI_Unauthorized();
+        if (intensityBps < YUGEAI_MIN_GRAB_BPS || intensityBps > YUGEAI_MAX_GRAB_BPS) revert YugeAI_BadInput();
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 epochStartSlot = epoch * YUGEAI_MAX_GRABS_PER_EPOCH;
+        if (_nextGrabId >= epochStartSlot + YUGEAI_MAX_GRABS_PER_EPOCH) revert YugeAI_LimitReached();
+
+        grabId = _nextGrabId++;
+        GrabRecord storage r = _grabs[grabId];
+        r.intensityBps = uint88(intensityBps);
+        r.loggedAt = uint40(block.timestamp);
+        r.epochId = uint64(epoch);
+        r.finalized = true;
+        emit GrabLogged(grabId, r.intensityBps, r.loggedAt, msg.sender);
+        return grabId;
+    }
+
+    function getGrab(uint256 grabId) external view returns (uint88 intensityBps, uint40 loggedAt, uint64 epochId, bool finalized) {
+        GrabRecord storage r = _grabs[grabId];
+        return (r.intensityBps, r.loggedAt, r.epochId, r.finalized);
+    }
+
+    function openDeal(address party, uint96 amountWei) external onlyDealMaker whenNotPaused nonReentrant returns (uint256 dealId) {
+        if (party == address(0) || amountWei == 0) revert YugeAI_ZeroAmount();
+        if (_nextDealId >= YUGEAI_MAX_DEAL_SLOTS) revert YugeAI_LimitReached();
+        dealId = _nextDealId++;
+        _deals[dealId] = DealSlot({
+            amountWei: amountWei,
+            createdAtBlock: uint64(block.number),
+            closedAtBlock: 0,
+            party: party,
+            active: true,
+            closed: false
+        });
+        emit DealExecuted(dealId, party, amountWei, uint64(block.number));
+        return dealId;
+    }
+
+    function closeDeal(uint256 dealId) external onlyDealMaker nonReentrant {
+        DealSlot storage d = _deals[dealId];
+        if (!d.active || d.closed) revert YugeAI_DealNotActive();
+        d.closed = true;
+        d.closedAtBlock = uint64(block.number);
