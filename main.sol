@@ -283,3 +283,98 @@ contract YugeAI {
         if (!d.active || d.closed) revert YugeAI_DealNotActive();
         d.closed = true;
         d.closedAtBlock = uint64(block.number);
+        (bool ok,) = d.party.call{ value: d.amountWei }("");
+        require(ok, "YugeAI: transfer failed");
+        emit DealExecuted(dealId, d.party, d.amountWei, uint64(block.number));
+    }
+
+    function getDeal(uint256 dealId) external view returns (
+        uint96 amountWei,
+        uint64 createdAtBlock,
+        uint64 closedAtBlock,
+        address party,
+        bool active,
+        bool closed
+    ) {
+        DealSlot storage d = _deals[dealId];
+        return (d.amountWei, d.createdAtBlock, d.closedAtBlock, d.party, d.active, d.closed);
+    }
+
+    function sealSlot(uint256 slotIndex, uint64 variantId, uint88 bandBps) external onlyCommander {
+        if (slotIndex >= _nextSlotIndex) revert YugeAI_InvalidSlot();
+        BatchSlot storage s = _slots[slotIndex];
+        if (s.sealed) revert YugeAI_SlotAlreadySealed();
+        s.bandBps = bandBps;
+        s.sealedAt = uint40(block.timestamp);
+        s.variantId = variantId;
+        s.sealed = true;
+        emit SlotSealed(slotIndex, variantId, bandBps, s.sealedAt);
+    }
+
+    function reserveSlot() external returns (uint256 slotIndex) {
+        if (!_authorizedKeepers[msg.sender]) revert YugeAI_Unauthorized();
+        uint256 epochEnd = genesisTime + (_currentEpoch + 1) * YUGEAI_EPOCH_DURATION_SECS;
+        if (block.timestamp >= epochEnd) _currentEpoch++;
+        uint256 slotsUsed = _nextSlotIndex - _currentEpoch * YUGEAI_MAX_GRABS_PER_EPOCH;
+        if (slotsUsed >= YUGEAI_MAX_GRABS_PER_EPOCH) {
+            _currentEpoch++;
+            slotsUsed = _nextSlotIndex - _currentEpoch * YUGEAI_MAX_GRABS_PER_EPOCH;
+        }
+        if (slotsUsed >= YUGEAI_MAX_GRABS_PER_EPOCH) revert YugeAI_InvalidSlot();
+        slotIndex = _nextSlotIndex;
+        _nextSlotIndex++;
+        _slots[slotIndex] = BatchSlot({ bandBps: 0, sealedAt: 0, variantId: 0, sealed: false });
+        return slotIndex;
+    }
+
+    function getSlot(uint256 slotIndex) external view returns (uint88 bandBps, uint40 sealedAt, uint64 variantId, bool sealed) {
+        BatchSlot storage s = _slots[slotIndex];
+        return (s.bandBps, s.sealedAt, s.variantId, s.sealed);
+    }
+
+    function setCovfefe(bytes32 key, bytes32 value) external onlyOracle {
+        if (block.number < _lastOracleBlock + YUGEAI_ORACLE_COOLDOWN_BLOCKS) revert YugeAI_OracleCooldown();
+        _lastOracleBlock = block.number;
+        _covfefeStore[key] = value;
+        _covfefeUpdatedBlock[key] = uint64(block.number);
+        emit CovfefeUpdated(key, value, uint64(block.number));
+    }
+
+    function pulseOracle(bytes32 feedId, int256 value) external onlyOracle {
+        if (block.number < _lastOracleBlock + YUGEAI_ORACLE_COOLDOWN_BLOCKS) revert YugeAI_OracleCooldown();
+        _lastOracleBlock = block.number;
+        emit OraclePulse(feedId, value, uint64(block.number));
+    }
+
+    function getCovfefe(bytes32 key) external view returns (bytes32 value, uint64 updatedBlock) {
+        return (_covfefeStore[key], _covfefeUpdatedBlock[key]);
+    }
+
+    function claimBigLeague(uint256 claimIndex) external whenNotPaused nonReentrant {
+        uint256 reward = _claimRewardWei[claimIndex];
+        if (reward == 0) revert YugeAI_InvalidGrabId();
+        _claimRewardWei[claimIndex] = 0;
+        _claimCount[msg.sender]++;
+        (bool ok,) = msg.sender.call{ value: reward }("");
+        require(ok, "YugeAI: claim transfer failed");
+        emit BigLeagueClaim(msg.sender, claimIndex, reward);
+    }
+
+    function setClaimReward(uint256 claimIndex, uint256 rewardWei) external onlyCommander {
+        _claimRewardWei[claimIndex] = rewardWei;
+    }
+
+    function sweepTreasury(address to, uint256 amountWei) external onlyTreasury nonReentrant {
+        if (to == address(0) || amountWei == 0) revert YugeAI_ZeroAmount();
+        if (_totalSweptWei + amountWei > sweepCapWei) revert YugeAI_SweepOverCap();
+        _totalSweptWei += amountWei;
+        (bool ok,) = to.call{ value: amountWei }("");
+        require(ok, "YugeAI: sweep failed");
+        emit TreasurySwept(to, amountWei);
+    }
+
+    function setGuardPaused(bool paused) external onlyCommander {
+        guardPaused = paused;
+        emit GuardToggled(paused);
+    }
+
