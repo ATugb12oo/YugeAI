@@ -93,3 +93,98 @@ struct BatchSlot {
     uint88 bandBps;
     uint40 sealedAt;
     uint64 variantId;
+    bool sealed;
+}
+
+struct EpochSnapshot {
+    uint64 recordedAtBlock;
+    uint32 totalGrabs;
+    uint128 sumIntensityBps;
+    bool recorded;
+}
+
+library YugeAIHelpers {
+    function bpsToWei(uint256 weiTotal, uint256 bps) internal pure returns (uint256) {
+        return (weiTotal * bps) / 10_000;
+    }
+    function clampIntensity(uint256 rawBps, uint256 minBps, uint256 maxBps) internal pure returns (uint88) {
+        if (rawBps < minBps) return uint88(minBps);
+        if (rawBps > maxBps) return uint88(maxBps);
+        return uint88(rawBps);
+    }
+    function isWinningIntensity(uint256 intensityBps, uint256 thresholdBps) internal pure returns (bool) {
+        return intensityBps >= thresholdBps;
+    }
+    function epochEndTime(uint256 genesisTime, uint256 epochId, uint256 durationSecs) internal pure returns (uint256) {
+        return genesisTime + (epochId + 1) * durationSecs;
+    }
+    function epochStartSlot(uint256 epochId, uint256 maxPerEpoch) internal pure returns (uint256) {
+        return epochId * maxPerEpoch;
+    }
+    function intensityInTier(uint8 tier) internal pure returns (uint256 minBps, uint256 maxBps) {
+        if (tier == 0) return (0, 999);
+        if (tier == 1) return (1000, 4999);
+        if (tier == 2) return (5000, 7999);
+        return (8000, 10000);
+    }
+    function tierFromIntensity(uint256 intensityBps) internal pure returns (uint8) {
+        if (intensityBps >= 8000) return 3;
+        if (intensityBps >= 5000) return 2;
+        if (intensityBps >= 1000) return 1;
+        return 0;
+    }
+    function safeAdd128(uint128 a, uint128 b) internal pure returns (uint128) {
+        uint128 c = a + b;
+        require(c >= a, "YugeAI: overflow");
+        return c;
+    }
+    function minUint256(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+    function maxUint256(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a : b;
+    }
+}
+
+contract YugeAI {
+    address public immutable commander;
+    address public immutable treasury;
+    address public immutable covfefeOracle;
+    address public immutable dealMaker;
+    address public immutable vault;
+
+    uint256 public immutable genesisTime;
+    uint256 public immutable sweepCapWei;
+    uint256 public immutable deployBlock;
+
+    bool public guardPaused;
+    uint256 private _reentrancyLock;
+    uint256 private _nextGrabId;
+    uint256 private _nextDealId;
+    uint256 private _nextSlotIndex;
+    uint256 private _nextClaimIndex;
+    uint256 private _totalSweptWei;
+    uint256 private _lastOracleBlock;
+    uint256 private _currentEpoch;
+
+    mapping(uint256 => GrabRecord) private _grabs;
+    mapping(uint256 => DealSlot) private _deals;
+    mapping(uint256 => BatchSlot) private _slots;
+    mapping(address => uint256) private _claimCount;
+    mapping(uint256 => uint256) private _claimRewardWei;
+    mapping(address => bool) private _authorizedKeepers;
+    mapping(bytes32 => bytes32) private _covfefeStore;
+    mapping(bytes32 => uint64) private _covfefeUpdatedBlock;
+    mapping(uint256 => EpochSnapshot) private _epochSnapshots;
+    mapping(uint256 => uint256) private _epochGrabCount;
+    uint256 private _vaultBalanceWei;
+
+    modifier onlyCommander() {
+        if (msg.sender != commander) revert YugeAI_NotCommander();
+        _;
+    }
+
+    modifier onlyTreasury() {
+        if (msg.sender != treasury) revert YugeAI_NotTreasury();
+        _;
+    }
