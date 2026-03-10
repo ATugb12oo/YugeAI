@@ -568,3 +568,98 @@ contract YugeAI {
         amounts = new uint96[](cap);
         createdAtBlocks = new uint64[](cap);
         parties = new address[](cap);
+        actives = new bool[](cap);
+        closeds = new bool[](cap);
+        uint256 written = 0;
+        for (uint256 id = fromId; id < _nextDealId && written < cap; id++) {
+            DealSlot storage d = _deals[id];
+            dealIds[written] = id;
+            amounts[written] = d.amountWei;
+            createdAtBlocks[written] = d.createdAtBlock;
+            parties[written] = d.party;
+            actives[written] = d.active;
+            closeds[written] = d.closed;
+            written++;
+        }
+        if (written < cap) {
+            assembly {
+                mstore(dealIds, written)
+                mstore(amounts, written)
+                mstore(createdAtBlocks, written)
+                mstore(parties, written)
+                mstore(actives, written)
+                mstore(closeds, written)
+            }
+        }
+        return (dealIds, amounts, createdAtBlocks, parties, actives, closeds);
+    }
+
+    function isWinningGrab(uint256 grabId) external view returns (bool) {
+        GrabRecord storage r = _grabs[grabId];
+        return r.loggedAt != 0 && YugeAIHelpers.isWinningIntensity(r.intensityBps, YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS);
+    }
+
+    function epochGrabCount(uint256 epochId) external view returns (uint256) {
+        return _epochGrabCount[epochId];
+    }
+
+    function protocolRevision() external pure returns (uint256) {
+        return YUGEAI_PROTOCOL_REV;
+    }
+
+    function namespaceSalt() external pure returns (bytes32) {
+        return YUGEAI_NAMESPACE_SALT;
+    }
+
+    function getSlotBatch(uint256 fromIndex, uint256 limit) external view returns (
+        uint256[] memory slotIndices,
+        uint88[] memory bandBpsList,
+        uint40[] memory sealedAtList,
+        uint64[] memory variantIds,
+        bool[] memory sealedList
+    ) {
+        uint256 cap = limit > 61 ? 61 : limit;
+        slotIndices = new uint256[](cap);
+        bandBpsList = new uint88[](cap);
+        sealedAtList = new uint40[](cap);
+        variantIds = new uint64[](cap);
+        sealedList = new bool[](cap);
+        uint256 written = 0;
+        for (uint256 idx = fromIndex; idx < _nextSlotIndex && written < cap; idx++) {
+            BatchSlot storage s = _slots[idx];
+            slotIndices[written] = idx;
+            bandBpsList[written] = s.bandBps;
+            sealedAtList[written] = s.sealedAt;
+            variantIds[written] = s.variantId;
+            sealedList[written] = s.sealed;
+            written++;
+        }
+        if (written < cap) {
+            assembly {
+                mstore(slotIndices, written)
+                mstore(bandBpsList, written)
+                mstore(sealedAtList, written)
+                mstore(variantIds, written)
+                mstore(sealedList, written)
+            }
+        }
+        return (slotIndices, bandBpsList, sealedAtList, variantIds, sealedList);
+    }
+
+    function getGrabFull(uint256 grabId) external view returns (GrabRecord memory) {
+        return _grabs[grabId];
+    }
+
+    function getDealFull(uint256 dealId) external view returns (DealSlot memory) {
+        return _deals[dealId];
+    }
+
+    function getSlotFull(uint256 slotIndex) external view returns (BatchSlot memory) {
+        return _slots[slotIndex];
+    }
+
+    function remainingSweepCap() external view returns (uint256) {
+        return sweepCapWei > _totalSweptWei ? sweepCapWei - _totalSweptWei : 0;
+    }
+
+    function nextEpochEndTime() external view returns (uint256) {
