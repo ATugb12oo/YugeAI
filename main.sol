@@ -1328,3 +1328,98 @@ contract YugeAI {
     }
 
     function epochSummary(uint256 epochId) external view returns (bool recorded, uint32 grabs, uint128 sumBps, uint64 atBlock) {
+        EpochSnapshot storage s = _epochSnapshots[epochId];
+        return (s.recorded, s.totalGrabs, s.sumIntensityBps, s.recordedAtBlock);
+    }
+
+    function configDigest() external view returns (
+        address cmd,
+        address tr,
+        address orc,
+        address dm,
+        address vlt,
+        uint256 gTime,
+        uint256 sweepCap,
+        uint256 dBlock
+    ) {
+        return (commander, treasury, covfefeOracle, dealMaker, vault, genesisTime, sweepCapWei, deployBlock);
+    }
+
+    function countsDigest() external view returns (uint256 g, uint256 d, uint256 s, uint256 sw, uint256 vb) {
+        return (_nextGrabId, _nextDealId, _nextSlotIndex, _totalSweptWei, _vaultBalanceWei);
+    }
+
+    function timeDigest() external view returns (uint256 nowTs, uint256 genesis, uint256 epochId, uint256 epochEndTs) {
+        uint256 e = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 end = YugeAIHelpers.epochEndTime(genesisTime, e, YUGEAI_EPOCH_DURATION_SECS);
+        return (block.timestamp, genesisTime, e, end);
+    }
+
+    function rev() external pure returns (uint256) { return YUGEAI_PROTOCOL_REV; }
+    function bpsDenom() external pure returns (uint256) { return YUGEAI_BPS; }
+    function maxGrabsEpoch() external pure returns (uint256) { return YUGEAI_MAX_GRABS_PER_EPOCH; }
+    function epochSecs() external pure returns (uint256) { return YUGEAI_EPOCH_DURATION_SECS; }
+    function minBps() external pure returns (uint256) { return YUGEAI_MIN_GRAB_BPS; }
+    function maxBps() external pure returns (uint256) { return YUGEAI_MAX_GRAB_BPS; }
+    function oracleCooldown() external pure returns (uint256) { return YUGEAI_ORACLE_COOLDOWN_BLOCKS; }
+    function maxDeals() external pure returns (uint256) { return YUGEAI_MAX_DEAL_SLOTS; }
+    function winningThresholdBps() external pure returns (uint256) { return YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS; }
+    function goldenRewardBps() external pure returns (uint256) { return YUGEAI_GOLDEN_EPOCH_REWARD_BPS; }
+    function vaultFeeBpsConst() external pure returns (uint256) { return YUGEAI_VAULT_FEE_BPS; }
+    function maxBatchGrabsConst() external pure returns (uint256) { return YUGEAI_MAX_BATCH_GRABS; }
+    function maxBatchSlotsConst() external pure returns (uint256) { return YUGEAI_MAX_BATCH_SLOTS; }
+    function snapshotCap() external pure returns (uint256) { return YUGEAI_EPOCH_SNAPSHOT_CAP; }
+    function lockFlag() external pure returns (uint256) { return YUGEAI_LOCK_FLAG; }
+    function saltConst() external pure returns (bytes32) { return YUGEAI_NAMESPACE_SALT; }
+
+    function getRoleCommander() external view returns (address) { return commander; }
+    function getRoleTreasury() external view returns (address) { return treasury; }
+    function getRoleOracle() external view returns (address) { return covfefeOracle; }
+    function getRoleDealMaker() external view returns (address) { return dealMaker; }
+    function getRoleVault() external view returns (address) { return vault; }
+    function getImmutableGenesisTime() external view returns (uint256) { return genesisTime; }
+    function getImmutableSweepCapWei() external view returns (uint256) { return sweepCapWei; }
+    function getImmutableDeployBlock() external view returns (uint256) { return deployBlock; }
+    function stateNextGrabId() external view returns (uint256) { return _nextGrabId; }
+    function stateNextDealId() external view returns (uint256) { return _nextDealId; }
+    function stateNextSlotIndex() external view returns (uint256) { return _nextSlotIndex; }
+    function stateTotalSweptWei() external view returns (uint256) { return _totalSweptWei; }
+    function stateVaultBalanceWei() external view returns (uint256) { return _vaultBalanceWei; }
+    function stateLastOracleBlock() external view returns (uint256) { return _lastOracleBlock; }
+    function stateCurrentEpoch() external view returns (uint256) { return _currentEpoch; }
+    function stateGuardPaused() external view returns (bool) { return guardPaused; }
+    function stateContractBalance() external view returns (uint256) { return address(this).balance; }
+
+    function hasGrab(uint256 id) external view returns (bool) {
+        return id < _nextGrabId && _grabs[id].loggedAt != 0;
+    }
+    function hasDeal(uint256 id) external view returns (bool) {
+        return id < _nextDealId;
+    }
+    function hasSlot(uint256 idx) external view returns (bool) {
+        return idx < _nextSlotIndex;
+    }
+    function hasEpochSnapshot(uint256 epochId) external view returns (bool) {
+        return _epochSnapshots[epochId].recorded;
+    }
+    function claimHasReward(uint256 claimIndex) external view returns (bool) {
+        return _claimRewardWei[claimIndex] > 0;
+    }
+    function isKeeper(address account) external view returns (bool) {
+        return _authorizedKeepers[account];
+    }
+    function covfefeKeyUpdatedBlock(bytes32 key) external view returns (uint64) {
+        return _covfefeUpdatedBlock[key];
+    }
+    function covfefeKeyValue(bytes32 key) external view returns (bytes32) {
+        return _covfefeStore[key];
+    }
+
+    function version() external pure returns (uint256) { return YUGEAI_PROTOCOL_REV; }
+    function denominatorBps() external pure returns (uint256) { return YUGEAI_BPS; }
+    function sweepCapWeiImmutable() external view returns (uint256) { return sweepCapWei; }
+    function genesisTimeImmutable() external view returns (uint256) { return genesisTime; }
+    function deployBlockImmutable() external view returns (uint256) { return deployBlock; }
+
+    receive() external payable {}
+}
