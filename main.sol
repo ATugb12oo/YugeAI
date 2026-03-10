@@ -663,3 +663,98 @@ contract YugeAI {
     }
 
     function nextEpochEndTime() external view returns (uint256) {
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        return YugeAIHelpers.epochEndTime(genesisTime, epoch, YUGEAI_EPOCH_DURATION_SECS);
+    }
+
+    function contractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function grabTier(uint256 grabId) external view returns (uint8) {
+        GrabRecord storage r = _grabs[grabId];
+        return r.loggedAt == 0 ? 0 : YugeAIHelpers.tierFromIntensity(r.intensityBps);
+    }
+
+    function commanderAddress() external view returns (address) { return commander; }
+    function treasuryAddress() external view returns (address) { return treasury; }
+    function oracleAddress() external view returns (address) { return covfefeOracle; }
+    function dealMakerAddress() external view returns (address) { return dealMaker; }
+    function vaultAddress() external view returns (address) { return vault; }
+    function genesisTimestamp() external view returns (uint256) { return genesisTime; }
+    function deployBlockNumber() external view returns (uint256) { return deployBlock; }
+    function isPaused() external view returns (bool) { return guardPaused; }
+    function maxGrabsPerEpoch() external pure returns (uint256) { return YUGEAI_MAX_GRABS_PER_EPOCH; }
+    function epochDurationSeconds() external pure returns (uint256) { return YUGEAI_EPOCH_DURATION_SECS; }
+    function minGrabBps() external pure returns (uint256) { return YUGEAI_MIN_GRAB_BPS; }
+    function maxGrabBps() external pure returns (uint256) { return YUGEAI_MAX_GRAB_BPS; }
+    function oracleCooldownBlocks() external pure returns (uint256) { return YUGEAI_ORACLE_COOLDOWN_BLOCKS; }
+    function maxDealSlots() external pure returns (uint256) { return YUGEAI_MAX_DEAL_SLOTS; }
+    function winningIntensityThresholdBps() external pure returns (uint256) { return YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS; }
+    function goldenEpochRewardBps() external pure returns (uint256) { return YUGEAI_GOLDEN_EPOCH_REWARD_BPS; }
+    function vaultFeeBps() external pure returns (uint256) { return YUGEAI_VAULT_FEE_BPS; }
+    function maxBatchGrabs() external pure returns (uint256) { return YUGEAI_MAX_BATCH_GRABS; }
+    function maxBatchSlots() external pure returns (uint256) { return YUGEAI_MAX_BATCH_SLOTS; }
+    function bpsDenominator() external pure returns (uint256) { return YUGEAI_BPS; }
+
+    function statsView() external view returns (
+        uint256 totalGrabs,
+        uint256 totalDeals,
+        uint256 totalSlots,
+        uint256 totalSwept,
+        uint256 vaultBal,
+        uint256 currentEpoch,
+        bool paused
+    ) {
+        return (
+            _nextGrabId,
+            _nextDealId,
+            _nextSlotIndex,
+            _totalSweptWei,
+            _vaultBalanceWei,
+            (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS,
+            guardPaused
+        );
+    }
+
+    function hasClaimReward(uint256 claimIndex) external view returns (bool) {
+        return _claimRewardWei[claimIndex] > 0;
+    }
+
+    function claimRewardAmount(uint256 claimIndex) external view returns (uint256) {
+        return _claimRewardWei[claimIndex];
+    }
+
+    function countWinningGrabsInEpoch(uint256 epochId) external view returns (uint256 count) {
+        uint256 startSlot = epochId * YUGEAI_MAX_GRABS_PER_EPOCH;
+        uint256 endSlot = startSlot + YUGEAI_MAX_GRABS_PER_EPOCH;
+        for (uint256 id = startSlot; id < endSlot && id < _nextGrabId; id++) {
+            if (YugeAIHelpers.isWinningIntensity(_grabs[id].intensityBps, YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS)) count++;
+        }
+        return count;
+    }
+
+    function sumIntensityInEpoch(uint256 epochId) external view returns (uint256 sum) {
+        uint256 startSlot = epochId * YUGEAI_MAX_GRABS_PER_EPOCH;
+        uint256 endSlot = startSlot + YUGEAI_MAX_GRABS_PER_EPOCH;
+        for (uint256 id = startSlot; id < endSlot && id < _nextGrabId; id++) {
+            sum += _grabs[id].intensityBps;
+        }
+        return sum;
+    }
+
+    function activeDealsCount() external view returns (uint256 count) {
+        for (uint256 id = 0; id < _nextDealId; id++) {
+            if (_deals[id].active && !_deals[id].closed) count++;
+        }
+        return count;
+    }
+
+    function sealedSlotsCount() external view returns (uint256 count) {
+        for (uint256 idx = 0; idx < _nextSlotIndex; idx++) {
+            if (_slots[idx].sealed) count++;
+        }
+        return count;
+    }
+
+    function getCommander() external view returns (address) { return commander; }
