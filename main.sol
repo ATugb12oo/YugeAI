@@ -948,3 +948,98 @@ contract YugeAI {
         uint256 cap = YugeAIHelpers.minUint256(maxCount, 41);
         indices = new uint256[](cap);
         uint256 written = 0;
+        for (uint256 idx = 0; idx < _nextSlotIndex && written < cap; idx++) {
+            if (_slots[idx].sealed) {
+                indices[written++] = idx;
+            }
+        }
+        if (written < cap) {
+            assembly { mstore(indices, written) }
+        }
+        return indices;
+    }
+
+    // --- Role and config views (alias for external integrations) ---
+    function getConfig() external view returns (
+        address cmd,
+        address tr,
+        address oracle,
+        address dm,
+        address v,
+        uint256 genesis,
+        uint256 cap,
+        uint256 blockDeploy
+    ) {
+        return (commander, treasury, covfefeOracle, dealMaker, vault, genesisTime, sweepCapWei, deployBlock);
+    }
+
+    function getCounts() external view returns (
+        uint256 grabs,
+        uint256 deals,
+        uint256 slots,
+        uint256 swept,
+        uint256 vaultBal
+    ) {
+        return (_nextGrabId, _nextDealId, _nextSlotIndex, _totalSweptWei, _vaultBalanceWei);
+    }
+
+    function getEpochInfo() external view returns (
+        uint256 currentEpochId,
+        uint256 epochStartTs,
+        uint256 epochEndTs,
+        uint256 secsRemaining
+    ) {
+        uint256 e = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 start = genesisTime + e * YUGEAI_EPOCH_DURATION_SECS;
+        uint256 end = start + YUGEAI_EPOCH_DURATION_SECS;
+        uint256 rem = block.timestamp >= end ? 0 : end - block.timestamp;
+        return (e, start, end, rem);
+    }
+
+    function checkKeeper(address account) external view returns (bool) {
+        return _authorizedKeepers[account];
+    }
+
+    function getCovfefeValue(bytes32 key) external view returns (bytes32) {
+        return _covfefeStore[key];
+    }
+
+    function getCovfefeUpdatedBlock(bytes32 key) external view returns (uint64) {
+        return _covfefeUpdatedBlock[key];
+    }
+
+    function grabExists(uint256 grabId) external view returns (bool) {
+        return grabId < _nextGrabId && _grabs[grabId].loggedAt != 0;
+    }
+
+    function dealExists(uint256 dealId) external view returns (bool) {
+        return dealId < _nextDealId;
+    }
+
+    function slotExists(uint256 slotIndex) external view returns (bool) {
+        return slotIndex < _nextSlotIndex;
+    }
+
+    function averageIntensityForEpoch(uint256 epochId) external view returns (uint256 avgBps) {
+        EpochSnapshot storage s = _epochSnapshots[epochId];
+        if (!s.recorded || s.totalGrabs == 0) return 0;
+        return uint256(s.sumIntensityBps) / uint256(s.totalGrabs);
+    }
+
+    function winningGrabsInEpoch(uint256 epochId) external view returns (uint256) {
+        return this.countWinningGrabsInEpoch(epochId);
+    }
+
+    function totalIntensityInEpoch(uint256 epochId) external view returns (uint256) {
+        return this.sumIntensityInEpoch(epochId);
+    }
+
+    function tierForGrab(uint256 grabId) external view returns (uint8) {
+        return this.grabTier(grabId);
+    }
+
+    function remainingSweepCapacity() external view returns (uint256) {
+        return this.remainingSweepCap();
+    }
+
+    function maxGoldenReward() external view returns (uint256) {
