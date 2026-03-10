@@ -758,3 +758,98 @@ contract YugeAI {
     }
 
     function getCommander() external view returns (address) { return commander; }
+    function getTreasury() external view returns (address) { return treasury; }
+    function getCovfefeOracle() external view returns (address) { return covfefeOracle; }
+    function getDealMaker() external view returns (address) { return dealMaker; }
+    function getVault() external view returns (address) { return vault; }
+    function getGenesisTime() external view returns (uint256) { return genesisTime; }
+    function getSweepCapWei() external view returns (uint256) { return sweepCapWei; }
+    function getDeployBlock() external view returns (uint256) { return deployBlock; }
+    function getNextGrabId() external view returns (uint256) { return _nextGrabId; }
+    function getNextDealId() external view returns (uint256) { return _nextDealId; }
+    function getNextSlotIndex() external view returns (uint256) { return _nextSlotIndex; }
+    function getTotalSweptWei() external view returns (uint256) { return _totalSweptWei; }
+    function getVaultBalanceWei() external view returns (uint256) { return _vaultBalanceWei; }
+    function getLastOracleBlock() external view returns (uint256) { return _lastOracleBlock; }
+    function getCurrentEpochInternal() external view returns (uint256) { return _currentEpoch; }
+
+    function intensityBpsForGrab(uint256 grabId) external view returns (uint88) {
+        return _grabs[grabId].intensityBps;
+    }
+
+    function loggedAtForGrab(uint256 grabId) external view returns (uint40) {
+        return _grabs[grabId].loggedAt;
+    }
+
+    function epochIdForGrab(uint256 grabId) external view returns (uint64) {
+        return _grabs[grabId].epochId;
+    }
+
+    function finalizedForGrab(uint256 grabId) external view returns (bool) {
+        return _grabs[grabId].finalized;
+    }
+
+    function amountWeiForDeal(uint256 dealId) external view returns (uint96) {
+        return _deals[dealId].amountWei;
+    }
+
+    function partyForDeal(uint256 dealId) external view returns (address) {
+        return _deals[dealId].party;
+    }
+
+    function activeForDeal(uint256 dealId) external view returns (bool) {
+        return _deals[dealId].active;
+    }
+
+    function closedForDeal(uint256 dealId) external view returns (bool) {
+        return _deals[dealId].closed;
+    }
+
+    function bandBpsForSlot(uint256 slotIndex) external view returns (uint88) {
+        return _slots[slotIndex].bandBps;
+    }
+
+    function sealedAtForSlot(uint256 slotIndex) external view returns (uint40) {
+        return _slots[slotIndex].sealedAt;
+    }
+
+    function variantIdForSlot(uint256 slotIndex) external view returns (uint64) {
+        return _slots[slotIndex].variantId;
+    }
+
+    function sealedForSlot(uint256 slotIndex) external view returns (bool) {
+        return _slots[slotIndex].sealed;
+    }
+
+    function epochSnapshotRecorded(uint256 epochId) external view returns (bool) {
+        return _epochSnapshots[epochId].recorded;
+    }
+
+    function epochSnapshotTotalGrabs(uint256 epochId) external view returns (uint32) {
+        return _epochSnapshots[epochId].totalGrabs;
+    }
+
+    function epochSnapshotSumIntensityBps(uint256 epochId) external view returns (uint128) {
+        return _epochSnapshots[epochId].sumIntensityBps;
+    }
+
+    function epochSnapshotRecordedAtBlock(uint256 epochId) external view returns (uint64) {
+        return _epochSnapshots[epochId].recordedAtBlock;
+    }
+
+    function timeUntilNextEpochEnd() external view returns (uint256) {
+        uint256 end = YugeAIHelpers.epochEndTime(genesisTime, (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS, YUGEAI_EPOCH_DURATION_SECS);
+        return block.timestamp >= end ? 0 : end - block.timestamp;
+    }
+
+    function currentEpochStartTime() external view returns (uint256) {
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        return genesisTime + epoch * YUGEAI_EPOCH_DURATION_SECS;
+    }
+
+    function currentEpochEndTime() external view returns (uint256) {
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        return YugeAIHelpers.epochEndTime(genesisTime, epoch, YUGEAI_EPOCH_DURATION_SECS);
+    }
+
+    function grabsInCurrentEpoch() external view returns (uint256) {
