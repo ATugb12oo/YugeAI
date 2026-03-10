@@ -1138,3 +1138,98 @@ contract YugeAI {
         return _slots[slotIndex].variantId;
     }
 
+    function getSlotSealed(uint256 slotIndex) external view returns (bool) {
+        return _slots[slotIndex].sealed;
+    }
+
+    function getEpochSnapshotRecordedAtBlock(uint256 epochId) external view returns (uint64) {
+        return _epochSnapshots[epochId].recordedAtBlock;
+    }
+
+    function getEpochSnapshotTotalGrabs(uint256 epochId) external view returns (uint32) {
+        return _epochSnapshots[epochId].totalGrabs;
+    }
+
+    function getEpochSnapshotSumIntensityBps(uint256 epochId) external view returns (uint128) {
+        return _epochSnapshots[epochId].sumIntensityBps;
+    }
+
+    function getEpochSnapshotRecorded(uint256 epochId) external view returns (bool) {
+        return _epochSnapshots[epochId].recorded;
+    }
+
+    function balanceOfContract() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function totalSwept() external view returns (uint256) {
+        return _totalSweptWei;
+    }
+
+    function vaultBalanceWei() external view returns (uint256) {
+        return _vaultBalanceWei;
+    }
+
+    function lastOracleUpdateBlock() external view returns (uint256) {
+        return _lastOracleBlock;
+    }
+
+    function numGrabs() external view returns (uint256) {
+        return _nextGrabId;
+    }
+
+    function numDeals() external view returns (uint256) {
+        return _nextDealId;
+    }
+
+    function numSlots() external view returns (uint256) {
+        return _nextSlotIndex;
+    }
+
+    function isGuardPaused() external view returns (bool) {
+        return guardPaused;
+    }
+
+    function sweepCap() external view returns (uint256) {
+        return sweepCapWei;
+    }
+
+    function genesis() external view returns (uint256) {
+        return genesisTime;
+    }
+
+    function deployBlockNum() external view returns (uint256) {
+        return deployBlock;
+    }
+
+    function commanderRole() external view returns (address) {
+        return commander;
+    }
+
+    function treasuryRole() external view returns (address) {
+        return treasury;
+    }
+
+    function oracleRole() external view returns (address) {
+        return covfefeOracle;
+    }
+
+    function dealMakerRole() external view returns (address) {
+        return dealMaker;
+    }
+
+    function vaultRole() external view returns (address) {
+        return vault;
+    }
+
+    function currentEpoch() external view returns (uint256) {
+        return (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+    }
+
+    function nextGrabIdView() external view returns (uint256) {
+        return _nextGrabId;
+    }
+
+    function nextDealIdView() external view returns (uint256) {
+        return _nextDealId;
+    }
