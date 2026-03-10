@@ -1233,3 +1233,98 @@ contract YugeAI {
     function nextDealIdView() external view returns (uint256) {
         return _nextDealId;
     }
+
+    function nextSlotIndexView() external view returns (uint256) {
+        return _nextSlotIndex;
+    }
+
+    function totalSweptWeiView() external view returns (uint256) {
+        return _totalSweptWei;
+    }
+
+    function vaultBalanceView() external view returns (uint256) {
+        return _vaultBalanceWei;
+    }
+
+    function userClaimCount(address user) external view returns (uint256) {
+        return _claimCount[user];
+    }
+
+    function rewardForClaim(uint256 claimIndex) external view returns (uint256) {
+        return _claimRewardWei[claimIndex];
+    }
+
+    function keeperAuthorized(address account) external view returns (bool) {
+        return _authorizedKeepers[account];
+    }
+
+    function covfefeValue(bytes32 key) external view returns (bytes32) {
+        return _covfefeStore[key];
+    }
+
+    function covfefeBlock(bytes32 key) external view returns (uint64) {
+        return _covfefeUpdatedBlock[key];
+    }
+
+    function grabRecord(uint256 grabId) external view returns (GrabRecord memory) {
+        return _grabs[grabId];
+    }
+
+    function dealRecord(uint256 dealId) external view returns (DealSlot memory) {
+        return _deals[dealId];
+    }
+
+    function slotRecord(uint256 slotIndex) external view returns (BatchSlot memory) {
+        return _slots[slotIndex];
+    }
+
+    function epochSnapshotRecord(uint256 epochId) external view returns (EpochSnapshot memory) {
+        return _epochSnapshots[epochId];
+    }
+
+    function fullStats() external view returns (
+        uint256 grabs,
+        uint256 deals,
+        uint256 slots,
+        uint256 swept,
+        uint256 vaultBal,
+        uint256 balance,
+        uint256 epoch,
+        uint256 epochEnd,
+        bool paused,
+        uint256 capRemaining
+    ) {
+        uint256 e = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 end = YugeAIHelpers.epochEndTime(genesisTime, e, YUGEAI_EPOCH_DURATION_SECS);
+        uint256 rem = sweepCapWei > _totalSweptWei ? sweepCapWei - _totalSweptWei : 0;
+        return (
+            _nextGrabId,
+            _nextDealId,
+            _nextSlotIndex,
+            _totalSweptWei,
+            _vaultBalanceWei,
+            address(this).balance,
+            e,
+            end,
+            guardPaused,
+            rem
+        );
+    }
+
+    function grabSummary(uint256 grabId) external view returns (uint88 bps, uint40 ts, uint64 eid, bool fin, uint8 tier) {
+        GrabRecord storage r = _grabs[grabId];
+        tier = r.loggedAt == 0 ? 0 : YugeAIHelpers.tierFromIntensity(r.intensityBps);
+        return (r.intensityBps, r.loggedAt, r.epochId, r.finalized, tier);
+    }
+
+    function dealSummary(uint256 dealId) external view returns (uint96 amt, address party, bool active, bool closed) {
+        DealSlot storage d = _deals[dealId];
+        return (d.amountWei, d.party, d.active, d.closed);
+    }
+
+    function slotSummary(uint256 slotIndex) external view returns (uint88 bps, uint40 ts, uint64 vid, bool sealed) {
+        BatchSlot storage s = _slots[slotIndex];
+        return (s.bandBps, s.sealedAt, s.variantId, s.sealed);
+    }
+
+    function epochSummary(uint256 epochId) external view returns (bool recorded, uint32 grabs, uint128 sumBps, uint64 atBlock) {
