@@ -1043,3 +1043,98 @@ contract YugeAI {
     }
 
     function maxGoldenReward() external view returns (uint256) {
+        return this.maxGoldenRewardFromVault();
+    }
+
+    function canSweep(uint256 amountWei) external view returns (bool) {
+        return amountWei > 0 && _totalSweptWei + amountWei <= sweepCapWei;
+    }
+
+    function canWithdrawVault(uint256 amountWei) external view returns (bool) {
+        return amountWei > 0 && amountWei <= _vaultBalanceWei;
+    }
+
+    function isDealOpen(uint256 dealId) external view returns (bool) {
+        return dealId < _nextDealId && _deals[dealId].active && !_deals[dealId].closed;
+    }
+
+    function isSlotSealed(uint256 slotIndex) external view returns (bool) {
+        return slotIndex < _nextSlotIndex && _slots[slotIndex].sealed;
+    }
+
+    function snapshotExists(uint256 epochId) external view returns (bool) {
+        return _epochSnapshots[epochId].recorded;
+    }
+
+    function protocolVersion() external pure returns (uint256) {
+        return YUGEAI_PROTOCOL_REV;
+    }
+
+    function bpsBase() external pure returns (uint256) {
+        return YUGEAI_BPS;
+    }
+
+    function epochSnapshotCap() external pure returns (uint256) {
+        return YUGEAI_EPOCH_SNAPSHOT_CAP;
+    }
+
+    function claimScanCap() external pure returns (uint256) {
+        return YUGEAI_CLAIM_SCAN_CAP;
+    }
+
+    function tierBounds(uint8 tier) external pure returns (uint256 minBps, uint256 maxBps) {
+        return YugeAIHelpers.intensityInTier(tier);
+    }
+
+    function getGrabEpochId(uint256 grabId) external view returns (uint64) {
+        return _grabs[grabId].epochId;
+    }
+
+    function getGrabIntensity(uint256 grabId) external view returns (uint88) {
+        return _grabs[grabId].intensityBps;
+    }
+
+    function getGrabLoggedAt(uint256 grabId) external view returns (uint40) {
+        return _grabs[grabId].loggedAt;
+    }
+
+    function getGrabFinalized(uint256 grabId) external view returns (bool) {
+        return _grabs[grabId].finalized;
+    }
+
+    function getDealAmount(uint256 dealId) external view returns (uint96) {
+        return _deals[dealId].amountWei;
+    }
+
+    function getDealParty(uint256 dealId) external view returns (address) {
+        return _deals[dealId].party;
+    }
+
+    function getDealCreatedBlock(uint256 dealId) external view returns (uint64) {
+        return _deals[dealId].createdAtBlock;
+    }
+
+    function getDealClosedBlock(uint256 dealId) external view returns (uint64) {
+        return _deals[dealId].closedAtBlock;
+    }
+
+    function getDealActive(uint256 dealId) external view returns (bool) {
+        return _deals[dealId].active;
+    }
+
+    function getDealClosed(uint256 dealId) external view returns (bool) {
+        return _deals[dealId].closed;
+    }
+
+    function getSlotBandBps(uint256 slotIndex) external view returns (uint88) {
+        return _slots[slotIndex].bandBps;
+    }
+
+    function getSlotSealedAt(uint256 slotIndex) external view returns (uint40) {
+        return _slots[slotIndex].sealedAt;
+    }
+
+    function getSlotVariantId(uint256 slotIndex) external view returns (uint64) {
+        return _slots[slotIndex].variantId;
+    }
+
