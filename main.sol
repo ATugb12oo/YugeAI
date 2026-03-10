@@ -853,3 +853,98 @@ contract YugeAI {
     }
 
     function grabsInCurrentEpoch() external view returns (uint256) {
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 startSlot = epoch * YUGEAI_MAX_GRABS_PER_EPOCH;
+        uint256 count = 0;
+        for (uint256 id = startSlot; id < _nextGrabId && id < startSlot + YUGEAI_MAX_GRABS_PER_EPOCH; id++) {
+            if (_grabs[id].loggedAt != 0) count++;
+        }
+        return count;
+    }
+
+    function slotsRemainingInCurrentEpoch() external view returns (uint256) {
+        uint256 epoch = (block.timestamp - genesisTime) / YUGEAI_EPOCH_DURATION_SECS;
+        uint256 startSlot = epoch * YUGEAI_MAX_GRABS_PER_EPOCH;
+        uint256 used = _nextSlotIndex > startSlot ? _nextSlotIndex - startSlot : 0;
+        if (used > YUGEAI_MAX_GRABS_PER_EPOCH) return 0;
+        return YUGEAI_MAX_GRABS_PER_EPOCH - used;
+    }
+
+    function canOracleUpdate() external view returns (bool) {
+        return block.number >= _lastOracleBlock + YUGEAI_ORACLE_COOLDOWN_BLOCKS;
+    }
+
+    function blocksUntilOracleCanUpdate() external view returns (uint256) {
+        if (block.number >= _lastOracleBlock + YUGEAI_ORACLE_COOLDOWN_BLOCKS) return 0;
+        return (_lastOracleBlock + YUGEAI_ORACLE_COOLDOWN_BLOCKS) - block.number;
+    }
+
+    function maxGoldenRewardFromVault() external view returns (uint256) {
+        return YugeAIHelpers.bpsToWei(_vaultBalanceWei, YUGEAI_GOLDEN_EPOCH_REWARD_BPS);
+    }
+
+    function sweepCapRemaining() external view returns (uint256) {
+        return sweepCapWei > _totalSweptWei ? sweepCapWei - _totalSweptWei : 0;
+    }
+
+    uint256 private constant YUGEAI_CLAIM_SCAN_CAP = 1000;
+
+    function totalClaimRewardsSet() external view returns (uint256 count) {
+        for (uint256 i = 0; i < YUGEAI_CLAIM_SCAN_CAP; i++) {
+            if (_claimRewardWei[i] > 0) count++;
+        }
+        return count;
+    }
+
+    function getGrabsInEpochRange(uint256 epochFrom, uint256 epochTo, uint256 maxResults) external view returns (
+        uint256[] memory grabIds,
+        uint88[] memory intensities,
+        uint64[] memory epochIds
+    ) {
+        uint256 cap = YugeAIHelpers.minUint256(maxResults, 81);
+        grabIds = new uint256[](cap);
+        intensities = new uint88[](cap);
+        epochIds = new uint64[](cap);
+        uint256 written = 0;
+        for (uint256 e = epochFrom; e <= epochTo && written < cap; e++) {
+            uint256 startSlot = e * YUGEAI_MAX_GRABS_PER_EPOCH;
+            uint256 endSlot = startSlot + YUGEAI_MAX_GRABS_PER_EPOCH;
+            for (uint256 id = startSlot; id < endSlot && id < _nextGrabId && written < cap; id++) {
+                GrabRecord storage r = _grabs[id];
+                if (r.loggedAt != 0) {
+                    grabIds[written] = id;
+                    intensities[written] = r.intensityBps;
+                    epochIds[written] = r.epochId;
+                    written++;
+                }
+            }
+        }
+        if (written < cap) {
+            assembly {
+                mstore(grabIds, written)
+                mstore(intensities, written)
+                mstore(epochIds, written)
+            }
+        }
+        return (grabIds, intensities, epochIds);
+    }
+
+    function getActiveDealIds(uint256 maxCount) external view returns (uint256[] memory dealIds) {
+        uint256 cap = YugeAIHelpers.minUint256(maxCount, 31);
+        dealIds = new uint256[](cap);
+        uint256 written = 0;
+        for (uint256 id = 0; id < _nextDealId && written < cap; id++) {
+            if (_deals[id].active && !_deals[id].closed) {
+                dealIds[written++] = id;
+            }
+        }
+        if (written < cap) {
+            assembly { mstore(dealIds, written) }
+        }
+        return dealIds;
+    }
+
+    function getSealedSlotIndices(uint256 maxCount) external view returns (uint256[] memory indices) {
+        uint256 cap = YugeAIHelpers.minUint256(maxCount, 41);
+        indices = new uint256[](cap);
+        uint256 written = 0;
